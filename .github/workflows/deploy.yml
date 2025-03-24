@@ -2,49 +2,108 @@ name: Deploy to EC2
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - uses: actions/checkout@v2
-    
-    - name: Setup Node.js
-      uses: actions/setup-node@v2
-      with:
-        node-version: '20'
-        
-    - name: Install & Build Frontend
-      run: |
-        cd client
-        npm install
-        npm run build
-        
-    - name: Deploy to EC2
-      uses: appleboy/scp-action@master
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ${{ secrets.EC2_USERNAME }}
-        key: ${{ secrets.EC2_SSH_KEY }}
-        source: "."
-        target: "/home/ubuntu/codeprepai"
-        
-    - name: Execute deployment commands
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ${{ secrets.EC2_USERNAME }}
-        key: ${{ secrets.EC2_SSH_KEY }}
-        script: |
-          cd /home/ubuntu/codeprepai
-          npm install
-          cd server
-          echo "NODE_ENV=production" > .env
-          echo "PORT=5000" >> .env
-          echo "MONGODB_URI=${{ secrets.MONGODB_URI }}" >> .env
-          echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
-          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
-          echo "JUDGE0_RAPID_API_KEY=${{ secrets.JUDGE0_API_KEY }}" >> .env
-          pm2 restart server.js || pm2 start server.js
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install & Build Frontend
+        run: |
+          cd client
+          npm ci
+          npm run build
+
+      - name: Create deployment package
+        run: |
+          # Create timestamp for version tracking
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          echo "DEPLOY_TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
+
+          # Create minimal deployment directory
+          mkdir -p deployment
+          cp -r client/dist deployment/client
+          mkdir -p deployment/server
+          cp -r server/config server/middleware server/models server/routes server/utils deployment/server/
+          cp server/server.js deployment/server/
+          cp server/package*.json deployment/server/
+          cp package*.json deployment/
+
+          # Create version file for tracking
+          echo "Version: $TIMESTAMP" > deployment/version.txt
+          echo "Commit: ${{ github.sha }}" >> deployment/version.txt
+
+          # Archive for transfer
+          cd deployment
+          tar -czf ../deploy.tar.gz .
+
+      - name: Deploy to EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "deploy.tar.gz"
+          target: "/home/ubuntu/deployments"
+
+      - name: Execute deployment commands
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Setup deployment directories
+            mkdir -p /home/ubuntu/deployments/releases
+            cd /home/ubuntu/deployments
+
+            # Extract new release
+            TIMESTAMP="${{ env.DEPLOY_TIMESTAMP }}"
+            RELEASE_DIR="/home/ubuntu/deployments/releases/$TIMESTAMP"
+            mkdir -p "$RELEASE_DIR"
+            tar -xzf deploy.tar.gz -C "$RELEASE_DIR"
+            rm deploy.tar.gz
+
+            # Install server dependencies
+            cd "$RELEASE_DIR/server"
+            npm ci --production
+
+            # Set up environment variables
+            echo "NODE_ENV=production" > .env
+            echo "PORT=5000" >> .env
+            echo "MONGODB_URI=${{ secrets.MONGODB_URI }}" >> .env
+            echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
+            echo "JUDGE0_RAPID_API_KEY=${{ secrets.JUDGE0_API_KEY }}" >> .env
+
+            # Create symbolic link to make current deployment the active one
+            ln -sfn "$RELEASE_DIR" /home/ubuntu/deployments/current
+
+            # Restart application using PM2
+            cd "$RELEASE_DIR"
+            pm2 describe server > /dev/null
+            if [ $? -eq 0 ]; then
+              # Reload if app exists
+              pm2 reload server || pm2 restart server
+            else
+              # Start if app doesn't exist
+              pm2 start server/server.js --name server
+            fi
+
+            # Keep last 3 deployments and remove older ones
+            cd /home/ubuntu/deployments/releases
+            ls -t | tail -n +4 | xargs --no-run-if-empty rm -rf
+
+            # Report success
+            echo "Deployment successful! New version: $TIMESTAMP"
