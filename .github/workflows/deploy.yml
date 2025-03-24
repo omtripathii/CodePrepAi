@@ -52,9 +52,6 @@ jobs:
           cp server/server.js deployment/server/
           cp server/package*.json deployment/server/
 
-          # Copy root package.json
-          cp package*.json deployment/
-
           # Create version file for tracking
           echo "Version: $TIMESTAMP" > deployment/version.txt
           echo "Commit: ${{ github.sha }}" >> deployment/version.txt
