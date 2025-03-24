@@ -6,4 +6,3 @@ dist/
 build/
 .vscode/
 ecosystem.config.js 
-codePrepAi.pem
