@@ -56,7 +56,7 @@ const TestCasePanel = ({
 
           {testCases.map((testCase, index) => (
             <TestCaseItem key={index}>
-              <TestCaseHeader>
+              <TestCaseItemHeader>
                 <TestCaseTitle>Test Case {index + 1}</TestCaseTitle>
                 <TestCaseStatus>
                   {testResults[index]?.passed ? (
@@ -69,7 +69,7 @@ const TestCasePanel = ({
                     </FailedIcon>
                   ) : null}
                 </TestCaseStatus>
-              </TestCaseHeader>
+              </TestCaseItemHeader>
               <TestCaseDetails>
                 <InputOutput>
                   <Label>Input:</Label>
@@ -196,7 +196,7 @@ const TestCaseItem = styled.div`
   border-left: 3px solid #3498db;
 `;
 
-const TestCaseHeader = styled.div`
+const TestCaseItemHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
