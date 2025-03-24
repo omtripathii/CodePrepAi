@@ -20,6 +20,7 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
+          cache-dependency-path: "client/package-lock.json"
 
       - name: Install & Build Frontend
         run: |
@@ -29,6 +30,19 @@ jobs:
           echo "🔨 Building frontend..."
           npm run build
           echo "✅ Frontend build complete"
+
+      - name: Setup Node.js for server
+        uses: actions/setup-node@v3
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "server/package-lock.json"
+
+      - name: Install server dependencies
+        run: |
+          echo "📦 Installing server dependencies..."
+          cd server
+          npm ci --omit=dev
 
       - name: Create deployment package
         run: |
@@ -48,7 +62,28 @@ jobs:
           echo "📂 Copying backend files..."
           mkdir -p deployment/server
           cp -r server/config server/middleware server/models server/routes server/utils deployment/server/
-          cp server/server.js server/ecosystem.config.js server/package*.json deployment/server/
+          cp server/server.js server/package*.json deployment/server/
+
+          # Copy PM2 ecosystem file or create it if not exists
+          if [ -f "server/ecosystem.config.js" ]; then
+            cp server/ecosystem.config.js deployment/server/
+          else
+            cat > deployment/server/ecosystem.config.js << 'EOL'
+            module.exports = {
+              apps: [{
+                name: "codeprepai",
+                script: "server.js",
+                instances: "max",
+                exec_mode: "cluster",
+                watch: false,
+                env: {
+                  NODE_ENV: "production",
+                  PORT: 5000
+                }
+              }]
+            }
+            EOL
+          fi
 
           # Add Nginx configuration to deployment package
           mkdir -p deployment/nginx
@@ -79,8 +114,7 @@ jobs:
               
               # Frontend static files
               location / {
-                  root /home/ubuntu/codeprepai/client;
-                  index index.html;
+                  alias /home/ubuntu/codeprepai/client/;
                   try_files $uri $uri/ /index.html;
               }
               
@@ -104,25 +138,6 @@ jobs:
           echo "Version: $TIMESTAMP" > deployment/version.txt
           echo "Commit: ${{ github.sha }}" >> deployment/version.txt
           echo "Deployment Date: $(date)" >> deployment/version.txt
-
-          # Create PM2 ecosystem file if not exists
-          if [ ! -f "server/ecosystem.config.js" ]; then
-            cat > deployment/server/ecosystem.config.js << 'EOL'
-            module.exports = {
-              apps: [{
-                name: "server",
-                script: "server.js",
-                instances: "max",
-                exec_mode: "cluster",
-                watch: false,
-                env: {
-                  NODE_ENV: "production",
-                  PORT: 5000
-                }
-              }]
-            }
-            EOL
-          fi
 
           # Archive for transfer
           cd deployment
@@ -181,8 +196,13 @@ jobs:
 
             # Set proper permissions
             echo "🔒 Setting file permissions..."
-            sudo chown -R www-data:www-data $RELEASE_DIR/client
+            sudo chown -R ubuntu:ubuntu $RELEASE_DIR
             sudo chmod -R 755 $RELEASE_DIR/client
+
+            # Make a backup of existing Nginx configuration if it exists
+            if [ -f /etc/nginx/sites-available/codeprepai.dev-om.live ]; then
+              sudo cp /etc/nginx/sites-available/codeprepai.dev-om.live /etc/nginx/sites-available/codeprepai.dev-om.live.bak
+            fi
 
             # Test Nginx configuration before applying
             echo "🔧 Testing Nginx configuration..."
@@ -190,7 +210,12 @@ jobs:
             sudo nginx -t
 
             if [ $? -ne 0 ]; then
-              echo "❌ Nginx configuration test failed. Aborting deployment."
+              echo "❌ Nginx configuration test failed. Restoring backup configuration..."
+              if [ -f /etc/nginx/sites-available/codeprepai.dev-om.live.bak ]; then
+                sudo cp /etc/nginx/sites-available/codeprepai.dev-om.live.bak /etc/nginx/sites-available/codeprepai.dev-om.live
+                sudo nginx -t && sudo systemctl reload nginx
+              fi
+              echo "Deployment aborted."
               exit 1
             fi
 
@@ -198,40 +223,55 @@ jobs:
             echo "✅ Nginx configuration valid. Enabling site..."
             sudo ln -sf /etc/nginx/sites-available/codeprepai.dev-om.live /etc/nginx/sites-enabled/
 
-            # Start the new application using PM2
-            echo "▶️ Starting new application version..."
-            cd $RELEASE_DIR/server
-            pm2 start ecosystem.config.js
-
-            # Wait for application to be fully started
-            echo "⏳ Waiting for application to start..."
-            sleep 5
-
-            # Verify new deployment is working
-            echo "🔍 Verifying new deployment..."
-            HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/api/health)
-
-            if [ "$HEALTH_CHECK" != "200" ]; then
-              echo "❌ Health check failed with status $HEALTH_CHECK. Rolling back..."
-              pm2 delete server
-              echo "✅ Rollback complete. Previous version still active."
-              exit 1
-            fi
-
-            # Gracefully switch from green to blue (atomic symlink swap)
-            if [ -d "$CURRENT_LINK" ] && [ ! -L "$CURRENT_LINK" ]; then
+            # Create symlink to new release
+            if [ -L "$CURRENT_LINK" ]; then
+              # If it's a symlink, store the previous release for potential rollback
+              PREVIOUS=$(readlink $CURRENT_LINK)
+              rm $CURRENT_LINK
+            elif [ -d "$CURRENT_LINK" ] && [ ! -L "$CURRENT_LINK" ]; then
               # If it's a directory and not a symlink, back it up
               echo "📦 Backing up current deployment..."
               BACKUP_NAME="codeprepai-backup-$(date +%Y%m%d%H%M%S)"
               mv $CURRENT_LINK $BACKUP_DIR/$BACKUP_NAME
-            elif [ -L "$CURRENT_LINK" ]; then
-              # If it's a symlink, store the previous release for potential rollback
-              PREVIOUS=$(readlink $CURRENT_LINK)
-              rm $CURRENT_LINK
             fi
 
             # Create symlink to new release
             ln -sf $RELEASE_DIR $CURRENT_LINK
+
+            # Start the new application using PM2
+            echo "▶️ Starting new application version..."
+            cd $RELEASE_DIR/server
+            pm2 delete codeprepai 2>/dev/null || true
+            pm2 start ecosystem.config.js
+
+            # Wait for application to be fully started
+            echo "⏳ Waiting for application to start..."
+            sleep 10
+
+            # Verify new deployment is working
+            echo "🔍 Verifying new deployment..."
+            HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/api/health || echo "000")
+
+            if [ "$HEALTH_CHECK" != "200" ]; then
+              echo "❌ Health check failed with status $HEALTH_CHECK. Rolling back..."
+              
+              # Rollback to previous version if available
+              if [ ! -z "$PREVIOUS" ] && [ -d "$PREVIOUS" ]; then
+                echo "🔙 Rolling back to previous version..."
+                rm -f $CURRENT_LINK
+                ln -sf $PREVIOUS $CURRENT_LINK
+                
+                cd $PREVIOUS/server
+                pm2 delete codeprepai 2>/dev/null || true
+                pm2 start ecosystem.config.js
+                
+                echo "✅ Rollback complete. Previous version restored."
+              else
+                echo "⚠️ No previous version found for rollback."
+              fi
+              
+              exit 1
+            fi
 
             # Gracefully reload services
             echo "♻️ Reloading services..."
@@ -240,10 +280,10 @@ jobs:
             # Gracefully stop the old PM2 process if exists
             if [ ! -z "$PREVIOUS" ] && [ -d "$PREVIOUS" ]; then
               cd $PREVIOUS/server
-              pm2 describe server > /dev/null 2>&1
+              pm2 describe codeprepai > /dev/null 2>&1
               if [ $? -eq 0 ]; then
                 echo "⏹️ Stopping previous application version..."
-                pm2 delete server
+                pm2 delete codeprepai
               fi
             fi
 
