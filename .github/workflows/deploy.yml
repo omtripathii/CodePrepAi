@@ -96,6 +96,27 @@ jobs:
               fi
             fi
 
+            # Kill any processes using port 5000
+            echo "🔍 Checking for processes using port 5000..."
+            PORT_PIDS=$(lsof -t -i:5000)
+            if [ -n "$PORT_PIDS" ]; then
+              echo "🔴 Found processes using port 5000. Killing: $PORT_PIDS"
+              for PID in $PORT_PIDS; do
+                sudo kill -9 $PID
+                echo "   Killed process $PID"
+              done
+            else
+              echo "✅ No processes found using port 5000"
+            fi
+
+            # Stop PM2 process completely
+            echo "⏹️ Stopping and deleting PM2 process..."
+            pm2 describe server > /dev/null
+            if [ $? -eq 0 ]; then
+              pm2 delete server
+              pm2 save
+            fi
+
             # Extract new deployment
             cd /home/ubuntu
             echo "📂 Extracting new deployment..."
@@ -117,43 +138,42 @@ jobs:
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             JUDGE0_RAPID_API_KEY=${{ secrets.JUDGE0_API_KEY }}
+            JUDGE0_API_URL=https://judge0-ce.p.rapidapi.com
             EOF
-
-            # Stop the current application
-            echo "⏹️ Stopping current application..."
-            pm2 describe server > /dev/null
-            if [ $? -eq 0 ]; then
-              pm2 stop server
-            fi
 
             # Switch to new deployment
             echo "🔄 Switching to new deployment..."
             rm -rf /home/ubuntu/codeprepai
             mv /home/ubuntu/codeprepai-new /home/ubuntu/codeprepai
 
-            # Start or restart application using PM2
+            # Start application using PM2 with proper configuration
             echo "▶️ Starting application..."
-            cd /home/ubuntu/codeprepai
-            export GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
-            if pm2 describe server > /dev/null; then
-              pm2 restart server --update-env
-            else
-              pm2 start server/server.js --name server
-            fi
+            cd /home/ubuntu/codeprepai/server
+            pm2 start server.js --name server --time -- --port 5000
             pm2 save
 
             # Verify application is running
             echo "🔍 Verifying application status..."
             sleep 5
             if ! pm2 list | grep -q "server.*online"; then
-              echo "❌ Application failed to start. Rolling back..."
+              echo "❌ Application failed to start. Checking logs..."
+              pm2 logs server --lines 20
+              echo "Rolling back to previous deployment..."
               rm -rf /home/ubuntu/codeprepai
               mv /home/ubuntu/backups/codeprepai-$timestamp /home/ubuntu/codeprepai
-              cd /home/ubuntu/codeprepai
-              pm2 restart server || pm2 start server/server.js --name server
+              cd /home/ubuntu/codeprepai/server
+              pm2 start server.js --name server
               echo "✅ Rollback complete"
               exit 1
             fi
+
+            # Additional debug - check what's running on port 5000 now
+            echo "🔍 Checking what's running on port 5000 now:"
+            sudo lsof -i :5000
+
+            # Additional debug - check node process status
+            echo "🔍 Node process status:"
+            ps aux | grep node
 
             # Set up Nginx SSL configuration
             echo "🔒 Setting up Nginx configuration..."
@@ -241,6 +261,10 @@ jobs:
             echo "🧹 Cleaning up old backups..."
             cd /home/ubuntu/backups
             ls -t | tail -n +4 | xargs --no-run-if-empty rm -rf
+
+            # Verify entire application is working
+            echo "🔍 Checking application health..."
+            curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/api/health || echo "Backend health check failed"
 
             # Report success
             echo "✅ Deployment successful! Version: $TIMESTAMP"
