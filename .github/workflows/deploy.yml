@@ -104,7 +104,7 @@ jobs:
               for PID in $PORT_PIDS; do
                 sudo kill -9 $PID
                 echo "   Killed process $PID"
-              done
+              end
             else
               echo "✅ No processes found using port 5000"
             fi
@@ -187,7 +187,7 @@ jobs:
             echo "🔍 Node process status:"
             ps aux | grep node
 
-            # Set up Nginx SSL configuration
+            # Set up Nginx configuration
             echo "🔒 Setting up Nginx configuration..."
             sudo tee /etc/nginx/sites-available/codeprepai.dev-om.live > /dev/null << 'EOL'
             # HTTP - Redirect all traffic to HTTPS
@@ -199,7 +199,6 @@ jobs:
                     return 301 https://$host$request_uri;
                 }
                 
-                # Required for Let's Encrypt validation
                 location /.well-known/acme-challenge/ {
                     root /var/www/html;
                 }
@@ -214,18 +213,12 @@ jobs:
                 ssl_certificate /etc/letsencrypt/live/codeprepai.dev-om.live/fullchain.pem;
                 ssl_certificate_key /etc/letsencrypt/live/codeprepai.dev-om.live/privkey.pem;
                 ssl_protocols TLSv1.2 TLSv1.3;
-                ssl_prefer_server_ciphers on;
-                ssl_ciphers 'EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH';
                 
-                # Frontend static files
+                # Frontend static files - NO DIST DIRECTORY
                 location / {
                     root /home/ubuntu/codeprepai/client;
                     index index.html;
                     try_files $uri $uri/ /index.html;
-                    
-                    # Performance optimizations
-                    expires 1d;
-                    add_header Cache-Control "public, max-age=86400";
                 }
                 
                 # API proxy
@@ -236,26 +229,21 @@ jobs:
                     proxy_set_header Connection 'upgrade';
                     proxy_set_header Host $host;
                     proxy_set_header X-Real-IP $remote_addr;
-                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                    proxy_set_header X-Forwarded-Proto $scheme;
                     proxy_cache_bypass $http_upgrade;
-                    
-                    # Don't cache API responses
-                    add_header Cache-Control "no-store, no-cache, must-revalidate";
                 }
                 
-                # Security headers
-                add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-                add_header X-Content-Type-Options "nosniff" always;
-                add_header X-Frame-Options "SAMEORIGIN" always;
-                add_header X-XSS-Protection "1; mode=block" always;
-                add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-                
-                # Logging
                 access_log /var/log/nginx/codeprepai.access.log;
                 error_log /var/log/nginx/codeprepai.error.log;
             }
             EOL
+
+            # Remove the symlink section since it's failing
+            # The files are already in the right place!
+
+            # Fix file permissions
+            echo "🔒 Setting correct file permissions..."
+            sudo chown -R www-data:www-data /home/ubuntu/codeprepai/client
+            sudo chmod -R 755 /home/ubuntu/codeprepai/client
 
             # Enable site and check Nginx config
             echo "🔧 Enabling Nginx site configuration..."
