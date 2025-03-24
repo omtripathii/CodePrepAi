@@ -146,6 +146,18 @@ jobs:
             rm -rf /home/ubuntu/codeprepai
             mv /home/ubuntu/codeprepai-new /home/ubuntu/codeprepai
 
+            # Fix file structure - Express looks in client/dist but Nginx in client
+            echo "🛠️ Fixing file structure..."
+            mkdir -p /home/ubuntu/codeprepai/client/dist
+            ln -sf /home/ubuntu/codeprepai/client/* /home/ubuntu/codeprepai/client/dist/ 2>/dev/null || true
+            # Remove any recursive link to avoid infinite loop
+            rm -f /home/ubuntu/codeprepai/client/dist/dist
+
+            # Fix permissions for Nginx
+            echo "🔒 Setting correct file permissions..."
+            sudo chown -R www-data:www-data /home/ubuntu/codeprepai/client
+            sudo chmod -R 755 /home/ubuntu/codeprepai/client
+
             # Start application using PM2 with proper configuration
             echo "▶️ Starting application..."
             cd /home/ubuntu/codeprepai/server
