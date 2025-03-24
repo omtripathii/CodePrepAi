@@ -8,117 +8,64 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 1
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: "20"
-          cache: "npm"
-          cache-dependency-path: "client/package-lock.json"
 
-      - name: Install & Build Frontend
+      - name: Build Frontend
         run: |
-          echo "📦 Installing frontend dependencies..."
           cd client
           npm ci
-          echo "🔨 Building frontend..."
           npm run build
-          echo "✅ Frontend build complete"
-
-      - name: Setup Node.js for server
-        uses: actions/setup-node@v3
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: "server/package-lock.json"
-
-      - name: Install server dependencies
-        run: |
-          echo "📦 Installing server dependencies..."
-          cd server
-          npm ci --omit=dev
 
       - name: Create deployment package
         run: |
-          echo "📝 Creating deployment package..."
           TIMESTAMP=$(date +%Y%m%d%H%M%S)
-          echo "DEPLOY_TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
-
-          # Create deployment structure that matches production exactly
           mkdir -p deployment
 
-          # Copy frontend files
-          echo "📂 Copying frontend files..."
+          # Frontend
           mkdir -p deployment/client
           cp -r client/dist/* deployment/client/
 
-          # Copy server files
-          echo "📂 Copying backend files..."
+          # Backend
           mkdir -p deployment/server
           cp -r server/config server/middleware server/models server/routes server/utils deployment/server/
           cp server/server.js server/package*.json deployment/server/
 
-          # Copy PM2 ecosystem file or create it if not exists
-          if [ -f "server/ecosystem.config.js" ]; then
-            cp server/ecosystem.config.js deployment/server/
-          else
-            cat > deployment/server/ecosystem.config.js << 'EOL'
-            module.exports = {
-              apps: [{
-                name: "codeprepai",
-                script: "server.js",
-                instances: "max",
-                exec_mode: "cluster",
-                watch: false,
-                env: {
-                  NODE_ENV: "production",
-                  PORT: 5000
-                }
-              }]
-            }
-            EOL
-          fi
+          # PM2 ecosystem file
+          cat > deployment/server/ecosystem.config.js << 'EOL'
+          module.exports = {
+            apps: [{
+              name: "server",
+              script: "server.js",
+              instances: "max",
+              exec_mode: "cluster",
+              env: {
+                NODE_ENV: "production",
+                PORT: 5000
+              }
+            }]
+          }
+          EOL
 
-          # Add Nginx configuration to deployment package
+          # Nginx config
           mkdir -p deployment/nginx
           cat > deployment/nginx/codeprepai.conf << 'EOL'
-          # HTTP - Redirect all traffic to HTTPS
           server {
               listen 80;
-              server_name codeprepai.dev-om.live www.codeprepai.dev-om.live;
+              server_name codeprepai.dev-om.live;
               
               location / {
-                  return 301 https://$host$request_uri;
-              }
-              
-              location /.well-known/acme-challenge/ {
-                  root /var/www/html;
-              }
-          }
-
-          # HTTPS - Serve application securely
-          server {
-              listen 443 ssl;
-              server_name codeprepai.dev-om.live www.codeprepai.dev-om.live;
-              
-              # SSL Configuration
-              ssl_certificate /etc/letsencrypt/live/codeprepai.dev-om.live/fullchain.pem;
-              ssl_certificate_key /etc/letsencrypt/live/codeprepai.dev-om.live/privkey.pem;
-              ssl_protocols TLSv1.2 TLSv1.3;
-              
-              # Frontend static files
-              location / {
-                  alias /home/ubuntu/codeprepai/client/;
+                  root /home/ubuntu/codeprepai/client;
+                  index index.html;
                   try_files $uri $uri/ /index.html;
               }
               
-              # API proxy
               location /api {
                   proxy_pass http://localhost:5000/api;
                   proxy_http_version 1.1;
@@ -126,24 +73,12 @@ jobs:
                   proxy_set_header Connection 'upgrade';
                   proxy_set_header Host $host;
                   proxy_set_header X-Real-IP $remote_addr;
-                  proxy_cache_bypass $http_upgrade;
               }
-              
-              access_log /var/log/nginx/codeprepai.access.log;
-              error_log /var/log/nginx/codeprepai.error.log;
           }
           EOL
 
-          # Create version file for tracking
-          echo "Version: $TIMESTAMP" > deployment/version.txt
-          echo "Commit: ${{ github.sha }}" >> deployment/version.txt
-          echo "Deployment Date: $(date)" >> deployment/version.txt
-
-          # Archive for transfer
           cd deployment
           tar -czf ../deploy.tar.gz .
-
-          echo "✅ Deployment package created"
 
       - name: Deploy to EC2
         uses: appleboy/scp-action@master
@@ -161,143 +96,91 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            echo "🚀 Starting deployment process..."
+            echo "🚀 Starting deployment..."
 
-            # Implement blue-green deployment
-            RELEASE_DIR="/home/ubuntu/codeprepai-$(date +%Y%m%d%H%M%S)"
+            # Setup directories
+            TIMESTAMP=$(date +%Y%m%d%H%M%S)
+            RELEASE_DIR="/home/ubuntu/codeprepai-${TIMESTAMP}"
             CURRENT_LINK="/home/ubuntu/codeprepai"
-            BACKUP_DIR="/home/ubuntu/backups"
 
-            # Create backup dir if it doesn't exist
-            mkdir -p $BACKUP_DIR
-
-            # Extract new deployment to a timestamped directory (blue environment)
-            echo "📂 Extracting new deployment to $RELEASE_DIR..."
+            # Extract new deployment
             mkdir -p $RELEASE_DIR
             tar -xzf /home/ubuntu/deploy.tar.gz -C $RELEASE_DIR
             rm /home/ubuntu/deploy.tar.gz
 
-            # Install server dependencies
-            echo "📦 Installing server dependencies..."
+            # Install dependencies
             cd $RELEASE_DIR/server
             npm ci --omit=dev
 
-            # Set up environment variables
-            echo "🔒 Setting up environment variables..."
-            cat << EOF > $RELEASE_DIR/server/.env
-            NODE_ENV=production
+            # Setup environment variables
+            echo "NODE_ENV=production
             PORT=5000
             MONGODB_URI=${{ secrets.MONGODB_URI }}
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             JUDGE0_RAPID_API_KEY=${{ secrets.JUDGE0_API_KEY }}
-            JUDGE0_API_URL=https://judge0-ce.p.rapidapi.com
-            EOF
+            JUDGE0_API_URL=https://judge0-ce.p.rapidapi.com" > .env
 
-            # Set proper permissions
-            echo "🔒 Setting file permissions..."
-            sudo chown -R ubuntu:ubuntu $RELEASE_DIR
-            sudo chmod -R 755 $RELEASE_DIR/client
-
-            # Make a backup of existing Nginx configuration if it exists
-            if [ -f /etc/nginx/sites-available/codeprepai.dev-om.live ]; then
-              sudo cp /etc/nginx/sites-available/codeprepai.dev-om.live /etc/nginx/sites-available/codeprepai.dev-om.live.bak
-            fi
-
-            # Test Nginx configuration before applying
-            echo "🔧 Testing Nginx configuration..."
-            sudo cp $RELEASE_DIR/nginx/codeprepai.conf /etc/nginx/sites-available/codeprepai.dev-om.live
+            # Test Nginx config
+            sudo cp $RELEASE_DIR/nginx/codeprepai.conf /etc/nginx/sites-available/codeprepai.conf
             sudo nginx -t
 
-            if [ $? -ne 0 ]; then
-              echo "❌ Nginx configuration test failed. Restoring backup configuration..."
-              if [ -f /etc/nginx/sites-available/codeprepai.dev-om.live.bak ]; then
-                sudo cp /etc/nginx/sites-available/codeprepai.dev-om.live.bak /etc/nginx/sites-available/codeprepai.dev-om.live
-                sudo nginx -t && sudo systemctl reload nginx
-              fi
-              echo "Deployment aborted."
-              exit 1
-            fi
-
-            # Enable site if not already enabled
-            echo "✅ Nginx configuration valid. Enabling site..."
-            sudo ln -sf /etc/nginx/sites-available/codeprepai.dev-om.live /etc/nginx/sites-enabled/
-
-            # Create symlink to new release
-            if [ -L "$CURRENT_LINK" ]; then
-              # If it's a symlink, store the previous release for potential rollback
-              PREVIOUS=$(readlink $CURRENT_LINK)
-              rm $CURRENT_LINK
-            elif [ -d "$CURRENT_LINK" ] && [ ! -L "$CURRENT_LINK" ]; then
-              # If it's a directory and not a symlink, back it up
-              echo "📦 Backing up current deployment..."
-              BACKUP_NAME="codeprepai-backup-$(date +%Y%m%d%H%M%S)"
-              mv $CURRENT_LINK $BACKUP_DIR/$BACKUP_NAME
-            fi
-
-            # Create symlink to new release
-            ln -sf $RELEASE_DIR $CURRENT_LINK
-
-            # Start the new application using PM2
-            echo "▶️ Starting new application version..."
-            cd $RELEASE_DIR/server
-            pm2 delete codeprepai 2>/dev/null || true
-            pm2 start ecosystem.config.js
-
-            # Wait for application to be fully started
-            echo "⏳ Waiting for application to start..."
-            sleep 10
-
-            # Verify new deployment is working
-            echo "🔍 Verifying new deployment..."
-            HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/api/health || echo "000")
-
-            if [ "$HEALTH_CHECK" != "200" ]; then
-              echo "❌ Health check failed with status $HEALTH_CHECK. Rolling back..."
+            if [ $? -eq 0 ]; then
+              # Enable site and reload nginx
+              sudo ln -sf /etc/nginx/sites-available/codeprepai.conf /etc/nginx/sites-enabled/
+              sudo systemctl reload nginx
               
-              # Rollback to previous version if available
-              if [ ! -z "$PREVIOUS" ] && [ -d "$PREVIOUS" ]; then
-                echo "🔙 Rolling back to previous version..."
-                rm -f $CURRENT_LINK
-                ln -sf $PREVIOUS $CURRENT_LINK
+              # Store previous version for rollback
+              if [ -L "$CURRENT_LINK" ]; then
+                PREVIOUS=$(readlink $CURRENT_LINK)
+                rm $CURRENT_LINK
+              fi
+              
+              # Update symlink
+              ln -sf $RELEASE_DIR $CURRENT_LINK
+              
+              # Start new application version
+              cd $RELEASE_DIR/server
+              pm2 start ecosystem.config.js
+              
+              # Verify deployment
+              sleep 5
+              HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/api/health || echo "000")
+              
+              if [ "$HEALTH_CHECK" = "200" ]; then
+                echo "✅ Deployment successful!"
                 
-                cd $PREVIOUS/server
-                pm2 delete codeprepai 2>/dev/null || true
-                pm2 start ecosystem.config.js
+                # Stop old version
+                if [ ! -z "$PREVIOUS" ] && [ -d "$PREVIOUS" ]; then
+                  cd $PREVIOUS/server
+                  pm2 delete server 2>/dev/null || true
+                fi
                 
-                echo "✅ Rollback complete. Previous version restored."
+                # Save PM2 process list
+                pm2 save
+                
+                # Clean up old deployments (keep last 3)
+                cd /home/ubuntu
+                ls -td codeprepai-20* | tail -n +4 | xargs --no-run-if-empty rm -rf
               else
-                echo "⚠️ No previous version found for rollback."
+                echo "❌ Health check failed with status $HEALTH_CHECK. Rolling back..."
+                
+                # Rollback to previous version
+                if [ ! -z "$PREVIOUS" ] && [ -d "$PREVIOUS" ]; then
+                  rm -f $CURRENT_LINK
+                  ln -sf $PREVIOUS $CURRENT_LINK
+                  
+                  cd $PREVIOUS/server
+                  pm2 start ecosystem.config.js
+                fi
+                
+                # Stop failed version
+                cd $RELEASE_DIR/server
+                pm2 delete server 2>/dev/null || true
+                
+                exit 1
               fi
-              
+            else
+              echo "❌ Nginx configuration test failed. Deployment aborted."
               exit 1
             fi
-
-            # Gracefully reload services
-            echo "♻️ Reloading services..."
-            sudo systemctl reload nginx
-
-            # Gracefully stop the old PM2 process if exists
-            if [ ! -z "$PREVIOUS" ] && [ -d "$PREVIOUS" ]; then
-              cd $PREVIOUS/server
-              pm2 describe codeprepai > /dev/null 2>&1
-              if [ $? -eq 0 ]; then
-                echo "⏹️ Stopping previous application version..."
-                pm2 delete codeprepai
-              fi
-            fi
-
-            # Save PM2 process list
-            pm2 save
-
-            # Clean up old deployments (keep last 3)
-            echo "🧹 Cleaning up old deployments..."
-            cd /home/ubuntu
-            ls -td codeprepai-20* | tail -n +4 | xargs --no-run-if-empty sudo rm -rf
-
-            # Clean up old backups (keep last 3)
-            cd $BACKUP_DIR
-            ls -td * | tail -n +4 | xargs --no-run-if-empty sudo rm -rf
-
-            echo "✅ Deployment successful!"
-            echo "🌐 Application is running at: https://codeprepai.dev-om.live"
