@@ -104,7 +104,7 @@ jobs:
               for PID in $PORT_PIDS; do
                 sudo kill -9 $PID
                 echo "   Killed process $PID"
-              end
+              done
             else
               echo "✅ No processes found using port 5000"
             fi
