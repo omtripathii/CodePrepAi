@@ -17,11 +17,7 @@ const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     "Content-Type": "application/json",
-  },
-  // Allow self-signed certificate for our backend
-  httpsAgent: new (require('https').Agent)({
-    rejectUnauthorized: false
-  })
+  }
 });
 
 // Add request interceptor to include auth token in requests
