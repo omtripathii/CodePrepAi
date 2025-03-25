@@ -94,14 +94,7 @@ if (isProduction) {
 // CORS configuration with production domains
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "https://3.92.223.195",
-      "https://3.92.223.195:5000",
-      "https://codeprepai.dev-om.live", 
-      "http://codeprepai.dev-om.live",
-      "https://code-prep-ai.vercel.app", 
-    ],
+    origin: true, // This will echo the Origin header back without modification
     credentials: true,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
