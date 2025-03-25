@@ -7,9 +7,10 @@ import {
   CODE_ENDPOINTS,
 } from "./constants";
 
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://codeprepai.dev-om.live/api'
-  : 'http://localhost:5000/api';
+const API_BASE_URL =
+  process.env.NODE_ENV === "production"
+    ? "http://44.212.64.93/api"
+    : "http://localhost:5000/api";
 
 // Create axios instance with base URL
 const api = axios.create({

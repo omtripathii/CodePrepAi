@@ -1,7 +1,7 @@
 // Base API URL that works in both development and production environments
 export const API_URL =
   process.env.NODE_ENV === "production"
-    ? "https://codeprepai.dev-om.live/api" // Production subdomain
+    ? "http://44.212.64.93/api" // Production subdomain
     : "http://localhost:5000/api"; // Development environment
 
 // Auth endpoints

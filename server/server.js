@@ -89,19 +89,29 @@ if (isProduction) {
 }
 
 // CORS configuration with production domains
+// app.use(
+//   cors({
+//     origin: [
+//       "http://localhost:5173",
+//       "http://localhost:3000",
+//       "https://codeprepai.dev-om.live", // Your domain
+//       "http://codeprepai.dev-om.live",
+//       "http://3.93.219.99", // Your EC2 IP
+//       "https://3.93.219.99",
+//     ],
+//     credentials: true,
+//   })
+// );
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:3000",
-      "https://codeprepai.dev-om.live", // Your domain
-      "http://codeprepai.dev-om.live",
-      "http://3.93.219.99", // Your EC2 IP
-      "https://3.93.219.99",
-    ],
+    // origin: "http://localhost:5173",
+    origin: ["http://44.212.64.93", "http://44.212.64.93:5000"],
     credentials: true,
+    methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+app.options("*", cors());
 
 app.use(bodyParser.json());
 app.use(express.json({ limit: "50mb" }));
@@ -194,9 +204,7 @@ app.listen(PORT, () => {
   );
   console.log(
     `API available at ${
-      isProduction
-        ? "https://codeprepai.dev-om.live/api"
-        : `http://localhost:${PORT}/api`
+      isProduction ? "http://44.212.64.93/api" : `http://localhost:${PORT}/api`
     }`
   );
 });
