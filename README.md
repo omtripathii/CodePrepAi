@@ -3,7 +3,7 @@
 
 > An AI-powered coding interview preparation platform designed to help developers excel in technical interviews through realistic mock interviews, real-time code execution, and AI-enhanced feedback.
 
-[![GitHub Actions](https://github.com/your-username/codeprepai/workflows/CI/CD/badge.svg)](https://github.com/your-username/codeprepai/actions)
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Live Demo](https://img.shields.io/badge/demo-online-green.svg)](https://codeprepai.dev-om.live)
 
