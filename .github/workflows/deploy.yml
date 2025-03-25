@@ -1,207 +1,44 @@
-name: Deploy to EC2
+name: 🚀 Deploy CodePrepAI
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    name: 🌟 Deploy to Production
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: "20"
-
-      - name: Build Frontend
-        run: |
-          cd client
-          npm ci
-          npm run build
-
-      - name: Create deployment package
-        run: |
-          mkdir -p deployment
-
-          # Frontend
-          mkdir -p deployment/client
-          cp -r client/dist/* deployment/client/
-
-          # Backend
-          mkdir -p deployment/server
-          cp -r server/config server/middleware server/models server/routes server/utils deployment/server/
-          cp server/server.js server/package*.json deployment/server/
-
-          # PM2 ecosystem file
-          cat > deployment/server/ecosystem.config.js << 'EOL'
-          module.exports = {
-            apps: [{
-              name: "server",
-              script: "server.js",
-              instances: "max",
-              exec_mode: "cluster",
-              env: {
-                NODE_ENV: "production",
-                PORT: 5000
-              }
-            }]
-          }
-          EOL
-
-          # Nginx config with proper paths
-          mkdir -p deployment/nginx
-          cat > deployment/nginx/codeprepai.conf << 'EOL'
-          # Disable the default site
-          server {
-              listen 80 default_server;
-              listen [::]:80 default_server;
-              server_name _;
-              return 444;
-          }
-
-          # Your application
-          server {
-              listen 80;
-              server_name localhost;
-              
-              access_log /var/log/nginx/codeprepai-access.log;
-              error_log /var/log/nginx/codeprepai-error.log;
-              
-              location / {
-                  root /home/ubuntu/codeprepai/client;
-                  index index.html;
-                  try_files $uri $uri/ /index.html;
-              }
-              
-              location /api {
-                  proxy_pass http://localhost:5000/api;
-                  proxy_http_version 1.1;
-                  proxy_set_header Upgrade $http_upgrade;
-                  proxy_set_header Connection 'upgrade';
-                  proxy_set_header Host $host;
-                  proxy_cache_bypass $http_upgrade;
-                  proxy_set_header X-Real-IP $remote_addr;
-                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-              }
-          }
-          EOL
-
-          cd deployment
-          tar -czf ../deploy.tar.gz .
-
-      - name: Deploy to EC2
-        uses: appleboy/scp-action@master
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "deploy.tar.gz"
-          target: "/home/ubuntu"
-
-      - name: Execute deployment commands
+      - name: ⚙️ Deploy using SSH
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            echo "🚀 Starting deployment..."
+            # Print colorful start message
+            echo -e "\e[1;34m▶️ Starting CodePrepAI Deployment\e[0m"
+            cd /var/www/JobsForce
 
-            # Setup directories
-            TIMESTAMP=$(date +%Y%m%d%H%M%S)
-            RELEASE_DIR="/home/ubuntu/codeprepai-${TIMESTAMP}"
-            CURRENT_LINK="/home/ubuntu/codeprepai"
+            # Update codebase
+            echo -e "\e[1;33m📥 Pulling latest changes\e[0m"
+            git pull origin main
 
-            # Extract new deployment
-            mkdir -p $RELEASE_DIR
-            tar -xzf /home/ubuntu/deploy.tar.gz -C $RELEASE_DIR
-            rm /home/ubuntu/deploy.tar.gz
+            # Backend setup
+            echo -e "\e[1;36m🛠️ Setting up backend\e[0m"
+            cd server
+            npm install --production
 
-            # Install dependencies
-            cd $RELEASE_DIR/server
-            npm ci --omit=dev
+            # Frontend setup
+            echo -e "\e[1;35m🎨 Building frontend\e[0m"
+            cd ../client
+            npm install --production
+            npm run build
 
-            # Setup environment variables
-            echo "NODE_ENV=production
-            PORT=5000
-            MONGODB_URI=${{ secrets.MONGODB_URI }}
-            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
-            JUDGE0_RAPID_API_KEY=${{ secrets.JUDGE0_API_KEY }}
-            JUDGE0_API_URL=https://judge0-ce.p.rapidapi.com" > .env
+            # Restart services
+            echo -e "\e[1;32m🔄 Restarting services\e[0m"
+            sudo systemctl restart nginx
+            pm2 reload all --update-env
 
-            # Fix permissions
-            sudo chown -R ubuntu:ubuntu $RELEASE_DIR
-            sudo chmod -R 755 $RELEASE_DIR
-
-            # Disable default site if it exists
-            sudo rm -f /etc/nginx/sites-enabled/default
-
-            # Copy and test Nginx config
-            sudo cp $RELEASE_DIR/nginx/codeprepai.conf /etc/nginx/sites-available/
-            sudo nginx -t
-
-            if [ $? -eq 0 ]; then
-              # Enable site and reload nginx
-              sudo ln -sf /etc/nginx/sites-available/codeprepai.conf /etc/nginx/sites-enabled/
-              
-              # Stop any running PM2 processes
-              pm2 stop all 2>/dev/null || true
-              
-              # Create/update symlink
-              if [ -L "$CURRENT_LINK" ]; then
-                PREVIOUS=$(readlink $CURRENT_LINK)
-                sudo rm -f $CURRENT_LINK
-              fi
-              sudo ln -sf $RELEASE_DIR $CURRENT_LINK
-              
-              # Start new application version
-              cd $CURRENT_LINK/server
-              pm2 start ecosystem.config.js
-              
-              # Save PM2 process list and make it start on reboot
-              pm2 save
-              pm2 startup
-              
-              # Restart Nginx completely instead of just reloading
-              sudo systemctl restart nginx
-              
-              # Verify deployment (with more time to start up)
-              echo "Waiting for server to start..."
-              sleep 10
-              HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/api/health || echo "000")
-              
-              if [ "$HEALTH_CHECK" = "200" ]; then
-                echo "✅ Deployment successful!"
-                
-                # Clean up old deployments (keep last 3)
-                cd /home/ubuntu
-                ls -td codeprepai-20* | tail -n +4 | xargs --no-run-if-empty sudo rm -rf
-                
-                echo "🌐 Application deployed successfully!"
-                echo "📝 Nginx logs: /var/log/nginx/codeprepai-*.log"
-              else
-                echo "❌ Health check failed with status $HEALTH_CHECK"
-                echo "🔍 Checking logs for errors..."
-                
-                # Show PM2 logs
-                pm2 logs --lines 20
-                
-                echo "🔄 Rolling back..."
-                if [ ! -z "$PREVIOUS" ] && [ -d "$PREVIOUS" ]; then
-                  sudo rm -f $CURRENT_LINK
-                  sudo ln -sf $PREVIOUS $CURRENT_LINK
-                  cd $PREVIOUS/server
-                  pm2 start ecosystem.config.js
-                fi
-                
-                exit 1
-              fi
-            else
-              echo "❌ Nginx configuration test failed. Deployment aborted."
-              exit 1
-            fi
+            echo -e "\e[1;42m ✅ DEPLOYMENT COMPLETED SUCCESSFULLY ✅ \e[0m"
