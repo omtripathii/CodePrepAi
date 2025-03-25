@@ -149,12 +149,10 @@ function robustJsonParse(textResult) {
     }
 }
 
-// Add this helper function at the top of your file
 function isMockJobId(id) {
   return id && typeof id === 'string' && id.startsWith('mock');
 }
 
-// Add this helper function at the top of your file
 async function findQuestionSafely(questionId) {
   try {
     if (!mongoose.Types.ObjectId.isValid(questionId)) {
@@ -170,7 +168,6 @@ async function findQuestionSafely(questionId) {
   }
 }
 
-// Add this specialized function for parsing JSON arrays
 function parseJsonArray(textResult) {
     try {
         console.log("Parsing JSON array input:", textResult);
@@ -341,13 +338,12 @@ router.get("/job/:jobId", auth, async (req, res) => {
 // @access  Private
 router.post("/start", auth, async (req, res) => {
   try {
-    const { jobId, complexity = 'medium' } = req.body; // Provide default
+    const { jobId, complexity = 'medium' } = req.body; 
     
     console.log('Starting interview for job:', jobId, 'complexity:', complexity);
     
     // Check if this is a mock job ID
     if (isMockJobId(jobId)) {
-      // Import mockJobs directly to avoid circular reference issues
       const { mockJobs } = require('../utils/mockData');
       const mockJob = mockJobs.find(job => job._id === jobId);
       
@@ -364,7 +360,7 @@ router.post("/start", auth, async (req, res) => {
         mockJobId: jobId,
         jobTitle: mockJob.title,
         company: mockJob.company || 'Mock Company',
-        complexity: complexity || 'medium', // Use default if still undefined
+        complexity: complexity || 'medium', 
         status: 'pending'
       });
       
@@ -378,8 +374,6 @@ router.post("/start", auth, async (req, res) => {
       });
     }
     
-    // Handle regular database job
-    // Make sure jobId is a valid ObjectId before querying
     if (!mongoose.Types.ObjectId.isValid(jobId)) {
       return res.status(400).json({ 
         success: false, 
@@ -403,7 +397,7 @@ router.post("/start", auth, async (req, res) => {
       jobTitle: job.title,
       company: job.company,
       complexity: complexity || 'medium',
-      status: 'pending'  // Use a valid enum value
+      status: 'pending' 
     });
     
     const interview = await newInterview.save();
@@ -566,7 +560,7 @@ router.put("/:id/submit", auth, async (req, res) => {
         overallScore: 60
       };
       interview.overallScore = 60;
-      interview.status = "reviewed"; // Set status to reviewed
+      interview.status = "reviewed";
     }
 
     // Save the updated interview
@@ -723,7 +717,7 @@ router.post("/generate-question", auth, async (req, res) => {
             description: questionData.description,
             examples: questionData.examples,
             difficulty: questionData.difficulty,
-            category: questionData.category, // Ensure this is a valid enum
+            category: questionData.category,
             constraints: questionData.constraints,
             testCases: questionData.testCases,
             relatedJobs: []
@@ -732,7 +726,7 @@ router.post("/generate-question", auth, async (req, res) => {
           console.log('Saving DSA question to database');
           const savedQuestion = await question.save();
 
-          // If we have an interviewId, associate this question with the interview
+          
           if (interviewId) {
             try {
               const interview = await Interview.findById(interviewId);
@@ -807,7 +801,7 @@ router.post("/get-test-cases", auth, async (req, res) => {
       return res.json({
         success: true,
         message: 'Retrieved existing test cases',
-        testCases: question.testCases.slice(0, 2) // Keep limiting to 2 test cases
+        testCases: question.testCases.slice(0, 2) // limiting to 2 test cases
       });
     }
 

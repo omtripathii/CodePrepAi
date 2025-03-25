@@ -97,7 +97,7 @@ const TestCasePanel = ({
   );
 };
 
-// Styled components for a panel that appears at the bottom
+
 const TestCasesContainer = styled.div`
   background-color: white;
   border-radius: 8px;
@@ -151,7 +151,6 @@ const CloseButtonWrapper = styled.span`
   }
 `;
 
-// Other styled components remain the same
 const TestCasesContent = styled.div`
   padding: 1rem;
   overflow-y: auto;

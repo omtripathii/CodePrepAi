@@ -230,7 +230,7 @@ router.get("/user", auth, async (req, res) => {
   }
 });
 
-// Add this route if it doesn't exist
+
 router.put("/users/profile", auth, async (req, res) => {
   try {
     // Get user from database (excluding password)
@@ -249,8 +249,8 @@ router.put("/users/profile", auth, async (req, res) => {
     // Handle profile updates
     if (req.body.profile) {
       user.profile = {
-        ...user.profile, // Keep existing profile data
-        ...req.body.profile, // Override with new values
+        ...user.profile,
+        ...req.body.profile,
       };
     }
 

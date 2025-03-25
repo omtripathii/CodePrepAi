@@ -41,7 +41,6 @@ const JobDetail = () => {
         }
 
         // If not found in localStorage, try API
-        // FIX: Remove direct assignment as getMockJobById already returns the data
         const jobData = await jobsAPI.getMockJobById(id);
         setJob(jobData);
         setLoading(false);

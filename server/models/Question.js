@@ -67,19 +67,19 @@ const QuestionSchema = new mongoose.Schema({
     }
   }],
   solution: {
-    type: String // Model solution provided by the admin
+    type: String 
   },
   hints: {
     type: [String],
     default: []
   },
   timeLimit: {
-    type: Number, // in milliseconds
+    type: Number, 
     default: 1000
   },
   memoryLimit: {
-    type: Number, // in KB
-    default: 131072 // 128 MB
+    type: Number, 
+    default: 131072 
   },
   relatedJobs: [{
     type: mongoose.Schema.Types.ObjectId,

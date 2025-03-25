@@ -12,7 +12,6 @@ const API_BASE_URL =
     ? import.meta.env.VITE_API_URL || "https://api.codeprepai.dev-om.live/api"
     : "http://localhost:5000/api";
 
-// Create axios instance with base URL
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -86,22 +85,22 @@ export const jobsAPI = {
     const response = await api.get(JOBS_ENDPOINTS.GET_ALL, {
       params: { page, ...filters },
     });
-    return response.data; // This is correct
+    return response.data; 
   },
 
   getMockJobs: async () => {
     const response = await api.get(JOBS_ENDPOINTS.GET_MOCK);
-    return response.data; // This is correct
+    return response.data; 
   },
 
   getJobById: async (jobId) => {
     const response = await api.get(`${JOBS_ENDPOINTS.GET_BY_ID}/${jobId}`);
-    return response.data; // This is correct
+    return response.data;
   },
 
   getMockJobById: async (jobId) => {
     const response = await api.get(`${JOBS_ENDPOINTS.GET_MOCK_BY_ID}/${jobId}`);
-    return response.data; // This is correct
+    return response.data; 
   },
 };
 
@@ -192,7 +191,6 @@ export const interviewsAPI = {
 export const codeAPI = {
   executeCode: async (code, language, input = "") => {
     const response = await api.post(CODE_ENDPOINTS.EXECUTE, {
-      // Fixed constant name
       code,
       language,
       input,
@@ -202,7 +200,6 @@ export const codeAPI = {
 
   runTests: async (code, language, testCases) => {
     const response = await api.post(CODE_ENDPOINTS.TEST, {
-      // Fixed constant name
       code,
       language,
       testCases,

@@ -9,11 +9,9 @@ const InterviewSchema = new mongoose.Schema({
   job: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'job',
-    // Not required anymore since we may use mockJobId
   },
   mockJobId: {
     type: String,
-    // This will store "mock1", "mock2", etc.
   },
   jobTitle: {
     type: String,
@@ -23,13 +21,10 @@ const InterviewSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  // Make question optional during initial creation
   question: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'question',
-    // No longer required, will be added after interview starts
   },
-  // Fix the enum values to include 'active'
   status: {
     type: String,
     enum: ['pending', 'active', 'in_progress', 'submitted', 'reviewed', 'completed'],
@@ -81,7 +76,7 @@ const InterviewSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Add method to get job data
+// method to get job data
 InterviewSchema.methods.getJobData = async function() {
   if (this.mockJobId) {
     const { mockJobs } = require('../utils/mockData');
