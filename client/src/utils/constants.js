@@ -1,7 +1,7 @@
 // Base API URL that works in both development and production environments
 export const API_URL =
   process.env.NODE_ENV === "production"
-    ? import.meta.env.VITE_API_URL || "https://cors-anywhere.herokuapp.com/https://3.92.223.195/api" // Production subdomain
+    ? import.meta.env.VITE_API_URL || "https://api.codeprepai.dev-om.live/api" // Production subdomain
     : "http://localhost:5000/api"; // Development environment
 
 // Auth endpoints

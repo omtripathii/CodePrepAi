@@ -9,7 +9,7 @@ import {
 
 const API_BASE_URL =
   process.env.NODE_ENV === "production"
-    ? "https://3.92.223.195/api"
+    ? import.meta.env.VITE_API_URL || "https://api.codeprepai.dev-om.live/api"
     : "http://localhost:5000/api";
 
 // Create axios instance with base URL
