@@ -18,6 +18,10 @@ const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
+  // Allow self-signed certificate for our backend
+  httpsAgent: new (require('https').Agent)({
+    rejectUnauthorized: false
+  })
 });
 
 // Add request interceptor to include auth token in requests
@@ -192,7 +196,7 @@ export const interviewsAPI = {
 export const codeAPI = {
   executeCode: async (code, language, input = "") => {
     const response = await api.post(CODE_ENDPOINTS.EXECUTE, {
-      // ✅ Fixed constant name
+      // Fixed constant name
       code,
       language,
       input,
@@ -202,7 +206,7 @@ export const codeAPI = {
 
   runTests: async (code, language, testCases) => {
     const response = await api.post(CODE_ENDPOINTS.TEST, {
-      // ✅ Fixed constant name
+      // Fixed constant name
       code,
       language,
       testCases,
