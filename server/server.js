@@ -105,7 +105,7 @@ if (isProduction) {
 app.use(
   cors({
     // origin: "http://localhost:5173",
-    origin: ["http://44.212.64.93", "http://44.212.64.93:5000"],
+    origin: ["http://3.92.223.195", "http://3.92.223.195:5000"],
     credentials: true,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -204,7 +204,7 @@ app.listen(PORT, () => {
   );
   console.log(
     `API available at ${
-      isProduction ? "http://44.212.64.93/api" : `http://localhost:${PORT}/api`
+      isProduction ? "http://3.92.223.195/api" : `http://localhost:${PORT}/api`
     }`
   );
 });
