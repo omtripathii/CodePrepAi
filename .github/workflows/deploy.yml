@@ -18,7 +18,6 @@ jobs:
       with:
         node-version: '20'
         
-        
     - name: 📦 Install client dependencies
       run: |
         cd client
@@ -61,6 +60,31 @@ jobs:
         NODE_ENV=production
         PORT=5000
         EOL"
+        
+        # Create ecosystem.config.js file (since it might be in .gitignore)
+        ssh -i ~/.ssh/ec2.key $EC2_USERNAME@$EC2_HOST "cat > ~/codeprepai/server/ecosystem.config.js << 'EOL'
+        module.exports = {
+          apps: [{
+            name: 'server',
+            script: 'server.js',
+            instances: 1,
+            autorestart: true,
+            watch: false,
+            max_memory_restart: '500M',
+            env: {
+              NODE_ENV: 'production',
+              PORT: 5000,
+              MONGODB_URI: ${{ secrets.MONGODB_URI }},
+              JWT_SECRET: ${{ secrets.JWT_SECRET }},
+              GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }},
+              JUDGE0_API_KEY: ${{ secrets.JUDGE0_API_KEY }}
+            }
+          }]
+        };
+        EOL"
+        
+        # Check Node.js version and update if needed
+        ssh -i ~/.ssh/ec2.key $EC2_USERNAME@$EC2_HOST "node -v | grep -q 'v16' && echo 'Updating Node.js to v18...' && curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash - && sudo apt-get install -y nodejs || echo 'Node.js version is fine'"
         
         # Install dependencies on the server
         ssh -i ~/.ssh/ec2.key $EC2_USERNAME@$EC2_HOST "cd ~/codeprepai/server && npm ci --production"
