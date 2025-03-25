@@ -19,7 +19,7 @@ jobs:
           script: |
             # Print colorful start message
             echo -e "\e[1;34m▶️ Starting CodePrepAI Deployment\e[0m"
-            cd /var/www/JobsForce
+            cd ~/codeprepai  # Changed to target the codeprepai folder
 
             # Update codebase
             echo -e "\e[1;33m📥 Pulling latest changes\e[0m"
