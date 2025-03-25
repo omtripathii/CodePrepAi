@@ -2,7 +2,7 @@ import { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import AuthContext from "../context/AuthContext";
-import { authAPI } from "../utils/api"; // Import authAPI instead of axios
+import { authAPI } from "../utils/api"; 
 
 const Profile = () => {
   const { user, isAuthenticated, token, updateUser, logout } =
@@ -36,7 +36,6 @@ const Profile = () => {
       return;
     }
 
-    // Initialize form with user data
     if (user) {
       setFormData({
         name: user.name || "",
@@ -67,13 +66,12 @@ const Profile = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Clear previous messages
     setSuccess(null);
     setError(null);
     setSaving(true);
 
     try {
-      // Password validation if changing password
+
       if (formData.newPassword) {
         if (formData.newPassword !== formData.confirmNewPassword) {
           setError("New passwords do not match");
@@ -88,7 +86,6 @@ const Profile = () => {
         }
       }
 
-      // Prepare update data
       const updateData = {
         name: formData.name,
         email: formData.email,
@@ -106,7 +103,6 @@ const Profile = () => {
         },
       };
 
-      // Include password data if changing password
       if (formData.newPassword && formData.currentPassword) {
         updateData.currentPassword = formData.currentPassword;
         updateData.newPassword = formData.newPassword;
@@ -142,10 +138,7 @@ const Profile = () => {
       )
     ) {
       try {
-        // Use the API utility instead of hardcoded URL
         await authAPI.deleteAccount();
-
-        // Log the user out
         logout();
         navigate("/");
       } catch (err) {

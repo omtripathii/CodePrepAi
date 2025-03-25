@@ -130,7 +130,7 @@ const GenerateButton = styled.button`
   }
 `;
 
-// New scrollable container for question content
+
 const QuestionScrollContainer = styled.div`
   flex: 1;
   overflow-y: auto;

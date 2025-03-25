@@ -27,7 +27,7 @@ const CodeEditor = ({
     setShowOutput(false);
   };
 
-  // Show output when there are execution results
+
   useEffect(() => {
     if (executionResult || error) {
       setShowOutput(true);
@@ -134,7 +134,7 @@ const MonacoEditorWrapper = styled.div`
   min-height: 400px;
 `;
 
-// The floating output window inside the editor
+
 const FloatingOutputWrapper = styled.div`
   position: absolute;
   bottom: 30px;

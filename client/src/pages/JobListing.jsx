@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import styled from "styled-components";
-import { jobsAPI } from "../utils/api"; // Add this import
-import { API_URL, JOBS_ENDPOINTS } from "../utils/constants";
+import { jobsAPI } from "../utils/api";
 
 const JobListing = () => {
   const [jobs, setJobs] = useState([]);
@@ -22,7 +21,7 @@ const JobListing = () => {
       setError(null);
 
       try {
-        // FIX: Remove .data as jobsAPI.getMockJobs() already returns the data
+        
         const jobData = await jobsAPI.getMockJobs();
 
         // Cache the jobs for viewing job details later
@@ -47,7 +46,7 @@ const JobListing = () => {
     fetchJobs();
   }, [page]);
 
-  // Hardcoded mock data as a last resort fallback
+  // Hardcoded mock data as a fallback
   const getHardcodedMockData = () => {
     return [
       {
@@ -91,7 +90,7 @@ const JobListing = () => {
 
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
-    setPage(1); // Reset to first page on new search
+    setPage(1); 
   };
 
   const handleFilterChange = (e) => {
@@ -100,7 +99,7 @@ const JobListing = () => {
       ...prev,
       [name]: value,
     }));
-    setPage(1); // Reset to first page on new filter
+    setPage(1); 
   };
 
   const loadMoreJobs = () => {
@@ -244,7 +243,7 @@ const JobListing = () => {
   );
 };
 
-// Styled components remain the same
+
 const JobListingContainer = styled.div`
   max-width: 1500px;
   margin: 0 auto;

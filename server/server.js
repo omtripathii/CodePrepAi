@@ -3,8 +3,8 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const dotenv = require("dotenv");
-const helmet = require("helmet"); // Add this (install with npm install helmet)
-const rateLimit = require("express-rate-limit"); // Add this (install with npm install express-rate-limit)
+const helmet = require("helmet"); 
+const rateLimit = require("express-rate-limit");
 const path = require("path");
 
 // Improve error handling for uncaught exceptions
@@ -27,11 +27,11 @@ const interviewRoutes = require("./routes/interviews");
 const codeRoutes = require("./routes/code");
 const { mockJobs } = require("./utils/mockData");
 
-// Add this near the beginning of your server.js to ensure all models are loaded
+// Import all models
 require("./models/User");
 require("./models/Job");
 require("./models/Interview");
-require("./models/Question"); // Make sure this is included
+require("./models/Question");
 
 // Initialize Express app
 const app = express();
@@ -45,7 +45,7 @@ app.set('trust proxy', 1);
 if (isProduction) {
   app.use(
     helmet({
-      contentSecurityPolicy: false, // May need to adjust based on your app's needs
+      contentSecurityPolicy: false, 
     })
   );
 
@@ -118,7 +118,7 @@ mongoose
   .connect(process.env.MONGODB_URI, {
     serverSelectionTimeoutMS: 5000,
     socketTimeoutMS: 45000,
-    maxPoolSize: isProduction ? 30 : 10, // More connections for production
+    maxPoolSize: isProduction ? 30 : 10, 
   })
   .then(() =>
     console.log(

@@ -1,17 +1,12 @@
 import { useState, useEffect, useContext, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import styled from "styled-components";
-import axios from "axios";
-import Editor from "@monaco-editor/react";
-import ReactMarkdown from "react-markdown";
 import AuthContext from "../context/AuthContext";
 import {
   FaCode,
   FaLightbulb,
   FaBrain,
-  FaRobot,
   FaExclamationCircle,
-  FaCheckCircle,
 } from "react-icons/fa";
 import { codeAPI, interviewsAPI } from "../utils/api";
 
@@ -23,9 +18,7 @@ import TestCasePanel from "../components/interview/TestCasePanel";
 import FeedbackPanel from "../components/interview/FeedbackPanel";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 
-// const API_BASE_URL =
-//   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-
+// Default language templates
 const languageTemplates = {
   javascript: `/**
  * @param {*} input - The input parameter(s) for your solution
@@ -148,7 +141,7 @@ const MockInterview = () => {
   const navigate = useNavigate();
   const { isAuthenticated, token } = useContext(AuthContext);
 
-  // State
+  // States
   const [interview, setInterview] = useState(null);
   const [job, setJob] = useState(null);
   const [question, setQuestion] = useState(null);
@@ -169,13 +162,13 @@ const MockInterview = () => {
   const [apiCooldown, setApiCooldown] = useState(false);
   const [cooldownMessage, setCooldownMessage] = useState("");
 
-  // NEW: Track if test cases have been requested yet
+  // Track if test cases have been requested yet
   const [testCasesRequested, setTestCasesRequested] = useState(false);
 
-  // NEW: State to control test cases panel visibility
+  // State to control test cases panel visibility
   const [showTestCases, setShowTestCases] = useState(false);
 
-  // Add this state
+  // Ai - Feedback - State
   const [showAiFeedback, setShowAiFeedback] = useState(false);
 
   // Language options
@@ -188,7 +181,7 @@ const MockInterview = () => {
     { value: "ruby", label: "Ruby" },
   ];
 
-  // Add this state flag at the top of your component:
+  
   const [questionRequestInProgress, setQuestionRequestInProgress] =
     useState(false);
 
@@ -250,8 +243,6 @@ const MockInterview = () => {
             // If we just got a question ID, fetch the full question
             else if (typeof response.interview.question === "string") {
               console.log("Only question ID available, fetching question data");
-              // You'd need to implement a fetchQuestionById function
-              // For now, use the existing generate question endpoint
               if (!questionRequestInProgress) {
                 await generateQuestion(response.job, response.interview);
               }
@@ -288,7 +279,7 @@ const MockInterview = () => {
     }
   }, [interviewId]);
 
-  // Add this function to generate a question if needed
+
   const generateQuestion = async (jobData, interviewData) => {
     // Implement strong locking mechanism
     if (questionRequestInProgress) {
@@ -321,7 +312,7 @@ const MockInterview = () => {
         // Set the question state
         setQuestion(response.question);
 
-        // Also update the interview object to include the question
+        // Update the interview object to include the question
         setInterview((prev) => ({
           ...prev,
           question: response.question._id,
@@ -358,7 +349,7 @@ const MockInterview = () => {
     const newLanguage = e.target.value;
     setLanguage(newLanguage);
 
-    // Ask user before replacing their code if they've already written something
+    // Asking user before replacing their code if they've already written something
     if (
       code &&
       code.trim() !== "" &&
@@ -512,9 +503,6 @@ const MockInterview = () => {
 
       if (res && res.question) {
         setQuestion(res.question);
-
-        // No need to make a separate update call - the server already did it
-        // This avoids the ObjectId casting error
       }
     } catch (err) {
       // Handle rate limiting errors specially
@@ -555,7 +543,7 @@ const MockInterview = () => {
       edgeCases: "Checking edge cases...",
       improvements: "Finding potential improvements...",
       betterSolution: "",
-      isLoading: true, // Add this flag to indicate loading state
+      isLoading: true, 
     });
 
     setShowSubmissionModal(true);
@@ -593,7 +581,7 @@ const MockInterview = () => {
             // Update the existing feedback with the real AI feedback
             setFeedback({
               ...res.aiFeedback,
-              isLoading: false, // Mark as not loading anymore
+              isLoading: false, 
             });
           } else {
             console.error("Interview is reviewed but no feedback found");
@@ -613,7 +601,7 @@ const MockInterview = () => {
       } catch (err) {
         console.error("Error polling for feedback:", err);
       }
-    }, 2000); // Poll every 2 seconds for faster response
+    }, 2000); 
 
     // Clean up interval after 2 minutes (timeout)
     setTimeout(() => {
@@ -637,19 +625,19 @@ const MockInterview = () => {
     }, 120000);
   };
 
-  // Add this helper function to your component
+
   const getLanguageTemplate = (languageKey) => {
     return languageTemplates[languageKey] || languageTemplates.javascript;
   };
 
-  // Add a button to reset code to template
+  // button to reset code to template
   const resetCodeToTemplate = () => {
     if (window.confirm("Reset your code to the template?")) {
       setCode(getLanguageTemplate(language));
     }
   };
 
-  // Add this function to handle AI feedback request
+  // function to handle AI feedback request
   const requestAiFeedback = async () => {
     if (!code.trim()) {
       setError("Please write some code first.");
@@ -776,7 +764,7 @@ const MockInterview = () => {
                 onChange={setCode}
                 executing={executing}
                 executionResult={executionResult}
-                error={null} // We're showing errors at the top instead
+                error={null} 
               />
             </EditorContainer>
 
@@ -1028,7 +1016,6 @@ const ErrorMessage = styled.div`
   box-shadow: 0 5px 15px rgba(231, 76, 60, 0.2);
 `;
 
-// New components to handle error display
 const ErrorBanner = styled.div`
   display: flex;
   align-items: center;
@@ -1062,14 +1049,12 @@ const CloseButton = styled.button`
   }
 `;
 
-// New style component to create a container for the editor components
 const EditorContainer = styled.div`
   position: relative;
   flex: 1;
   overflow: hidden;
 `;
 
-// Style for the button
 const ResetButton = styled.button`
   background-color: #f0f0f0;
   border: 1px solid #ccc;

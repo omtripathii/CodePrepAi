@@ -10,7 +10,6 @@ const Dashboard = () => {
   const navigate = useNavigate();
 
   const [interviews, setInterviews] = useState([]);
-  const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState("interviews");
@@ -26,11 +25,6 @@ const Dashboard = () => {
         // Fetch user's interviews using the API service
         const interviewsData = await interviewsAPI.getUserInterviews();
         setInterviews(Array.isArray(interviewsData) ? interviewsData : []);
-
-        // Future implementation: fetch user's job applications
-        // const applicationsData = await applicationsAPI.getUserApplications();
-        // setApplications(applicationsData);
-
         setLoading(false);
       } catch (err) {
         console.error("Dashboard data fetch error:", err);
@@ -70,11 +64,6 @@ const Dashboard = () => {
           </StatCard>
 
           <StatCard>
-            <StatNumber>{applications.length}</StatNumber>
-            <StatLabel>Applications</StatLabel>
-          </StatCard>
-
-          <StatCard>
             <StatNumber>
               {
                 interviews.filter(
@@ -93,13 +82,6 @@ const Dashboard = () => {
           onClick={() => setActiveTab("interviews")}
         >
           Mock Interviews
-        </TabButton>
-
-        <TabButton
-          active={activeTab === "applications"}
-          onClick={() => setActiveTab("applications")}
-        >
-          Job Applications
         </TabButton>
       </TabsContainer>
 
@@ -165,24 +147,6 @@ const Dashboard = () => {
                 </EmptyStateText>
               </EmptyState>
             )}
-          </TabContent>
-        )}
-
-        {activeTab === "applications" && (
-          <TabContent>
-            <SectionHeader>
-              <h2>Your Job Applications</h2>
-              <Link to="/jobs">
-                <NewButton>Add Application</NewButton>
-              </Link>
-            </SectionHeader>
-
-            <EmptyState>
-              <EmptyStateTitle>No job applications yet</EmptyStateTitle>
-              <EmptyStateText>
-                Track your job applications to stay organized
-              </EmptyStateText>
-            </EmptyState>
           </TabContent>
         )}
       </ContentSection>
