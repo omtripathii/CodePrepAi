@@ -1,4 +1,4 @@
-name: 🚀 Deploy to EC2
+name: 🚀 Deploy Backend to EC2
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  deploy-backend:
     runs-on: ubuntu-latest
     
     steps:
@@ -18,21 +18,6 @@ jobs:
       with:
         node-version: '20'
         
-    - name: 📦 Install client dependencies
-      run: |
-        cd client
-        npm ci
-        
-    - name: 🏗️ Build client
-      run: |
-        cd client
-        npm run build
-        
-    - name: 📦 Install server dependencies
-      run: |
-        cd server
-        npm ci
-        
     - name: 🔑 Create SSH key
       run: |
         mkdir -p ~/.ssh
@@ -40,16 +25,16 @@ jobs:
         chmod 600 ~/.ssh/ec2.key
         echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
         
-    - name: 🚀 Deploy to EC2
+    - name: 🚀 Deploy Backend to EC2
       env:
         EC2_HOST: ${{ secrets.EC2_HOST }}
         EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
       run: |
-        # Create app directory structure if it doesn't exist
-        ssh -i ~/.ssh/ec2.key $EC2_USERNAME@$EC2_HOST "mkdir -p ~/codeprepai"
+        # Create backend directory structure if it doesn't exist
+        ssh -i ~/.ssh/ec2.key $EC2_USERNAME@$EC2_HOST "mkdir -p ~/codeprepai/server"
         
-        # Deploy the application
-        rsync -avz -e "ssh -i ~/.ssh/ec2.key" --exclude="node_modules" --exclude=".git" ./ $EC2_USERNAME@$EC2_HOST:~/codeprepai/
+        # Deploy only the server directory
+        rsync -avz -e "ssh -i ~/.ssh/ec2.key" --exclude="node_modules" --exclude=".git" ./server/ $EC2_USERNAME@$EC2_HOST:~/codeprepai/server/
         
         # Set up environment variables on the server
         ssh -i ~/.ssh/ec2.key $EC2_USERNAME@$EC2_HOST "cat > ~/codeprepai/server/.env << 'EOL'
@@ -61,7 +46,7 @@ jobs:
         PORT=5000
         EOL"
         
-        # Create ecosystem.config.js file (since it might be in .gitignore)
+        # Create ecosystem.config.js file
         ssh -i ~/.ssh/ec2.key $EC2_USERNAME@$EC2_HOST "cat > ~/codeprepai/server/ecosystem.config.js << 'EOL'
         module.exports = {
           apps: [{
@@ -79,9 +64,6 @@ jobs:
         };
         EOL"
         
-        # Check Node.js version and update if needed
-        ssh -i ~/.ssh/ec2.key $EC2_USERNAME@$EC2_HOST "node -v | grep -q 'v16' && echo 'Updating Node.js to v18...' && curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash - && sudo apt-get install -y nodejs || echo 'Node.js version is fine'"
-        
         # Install dependencies on the server
         ssh -i ~/.ssh/ec2.key $EC2_USERNAME@$EC2_HOST "cd ~/codeprepai/server && npm ci --production"
         
@@ -96,7 +78,7 @@ jobs:
         EC2_HOST: ${{ secrets.EC2_HOST }}
         EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
       run: |
-        ssh -i ~/.ssh/ec2.key $EC2_USERNAME@$EC2_HOST "cd ~/codeprepai && pm2 status"
+        ssh -i ~/.ssh/ec2.key $EC2_USERNAME@$EC2_HOST "cd ~/codeprepai/server && pm2 status"
         
-    - name: ✨ Deployment completed
-      run: echo "Deployment completed successfully!"
+    - name: ✨ Backend Deployment completed
+      run: echo "Backend deployment completed successfully!"

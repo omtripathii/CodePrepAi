@@ -38,6 +38,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const isProduction = process.env.NODE_ENV === "production";
 
+// Set trust proxy to true since we're behind Nginx
+app.set('trust proxy', 1);
+
 // Production security middleware
 if (isProduction) {
   app.use(
@@ -89,23 +92,15 @@ if (isProduction) {
 }
 
 // CORS configuration with production domains
-// app.use(
-//   cors({
-//     origin: [
-//       "http://localhost:5173",
-//       "http://localhost:3000",
-//       "https://codeprepai.dev-om.live", // Your domain
-//       "http://codeprepai.dev-om.live",
-//       "http://3.93.219.99", // Your EC2 IP
-//       "https://3.93.219.99",
-//     ],
-//     credentials: true,
-//   })
-// );
 app.use(
   cors({
-    // origin: "http://localhost:5173",
-    origin: ["http://3.92.223.195", "http://3.92.223.195:5000"],
+    origin: [
+      "http://localhost:5173",
+      "http://3.92.223.195",
+      "http://3.92.223.195:5000",
+      "https://codeprepai.dev-om.live", // Your Vercel subdomain
+      "https://code-prep-ai.vercel.app/", // Default Vercel domain (if applicable)
+    ],
     credentials: true,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -167,15 +162,11 @@ app.use("/api/code", codeRoutes);
 
 // In production, serve the frontend from the built files
 if (isProduction) {
-  const clientBuildPath = path.join(__dirname, "../client/dist");
-
-  // Serve static files
-  app.use(express.static(clientBuildPath));
-
-  // For all other routes, serve the index.html
+  // Remove static file serving since frontend will be on Vercel
+  // Just keep API routes
   app.get("*", (req, res) => {
     if (!req.path.startsWith("/api/")) {
-      res.sendFile(path.join(clientBuildPath, "index.html"));
+      res.status(404).json({ message: "Not found - API only server" });
     }
   });
 } else {
