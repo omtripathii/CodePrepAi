@@ -3,6 +3,7 @@ name: 🚀 Deploy CodePrepAI
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -17,28 +18,110 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            set -e
+
             # Print colorful start message
             echo -e "\e[1;34m▶️ Starting CodePrepAI Deployment\e[0m"
-            cd ~/codeprepai  # Changed to target the codeprepai folder
 
-            # Update codebase
-            echo -e "\e[1;33m📥 Pulling latest changes\e[0m"
-            git pull origin main
+            # Use absolute path instead of ~ to avoid issues
+            CODE_DIR="$HOME/codeprepai"
 
-            # Backend setup
+            # Check if directory exists, if not create it
+            if [ ! -d "$CODE_DIR" ]; then
+              echo -e "\e[1;33m📁 Creating codeprepai directory\e[0m"
+              mkdir -p "$CODE_DIR"
+            fi
+
+            cd "$CODE_DIR"
+
+            # Check if git repo is initialized, if not clone it
+            if [ ! -d ".git" ]; then
+              echo -e "\e[1;33m🔄 Initializing git repository\e[0m"
+              git init
+              git remote add origin https://github.com/omtripathii/CodePrepAi.git
+              git fetch || { echo -e "\e[1;31m❌ Git fetch failed\e[0m"; exit 1; }
+              git checkout -f main || { echo -e "\e[1;31m❌ Git checkout failed\e[0m"; exit 1; }
+            else
+              # Reset any local changes that might block the pull
+              echo -e "\e[1;33m🧹 Cleaning repository\e[0m"
+              git reset --hard HEAD
+              git clean -fd
+              
+              # Update codebase with proper error handling
+              echo -e "\e[1;33m📥 Pulling latest changes\e[0m"
+              git pull origin main || { echo -e "\e[1;31m❌ Git pull failed\e[0m"; exit 1; }
+            fi
+
+            # Setup environment variables if needed
+            echo -e "\e[1;36m🔐 Setting up environment variables\e[0m"
+            if [ ! -f ".env" ]; then
+              touch .env
+              echo "NODE_ENV=production" >> .env
+              # Add more environment variables as needed
+            fi
+
+            # Backend setup with better error handling
             echo -e "\e[1;36m🛠️ Setting up backend\e[0m"
-            cd server
-            npm install --production
+            if [ -d "server" ]; then
+              cd server
+              echo -e "\e[1;36m🧹 Cleaning npm cache\e[0m"
+              npm cache clean --force
+              echo -e "\e[1;36m📦 Installing backend dependencies\e[0m"
+              npm install --production || { echo -e "\e[1;31m❌ Backend installation failed\e[0m"; exit 1; }
+              cd "$CODE_DIR"
+            else
+              echo -e "\e[1;31m❌ Server directory not found\e[0m"
+              ls -la
+              exit 1
+            fi
 
-            # Frontend setup
+            # Frontend setup with better error handling
             echo -e "\e[1;35m🎨 Building frontend\e[0m"
-            cd ../client
-            npm install --production
-            npm run build
+            if [ -d "client" ]; then
+              cd client
+              echo -e "\e[1;35m🧹 Cleaning npm cache\e[0m"
+              npm cache clean --force
+              echo -e "\e[1;35m📦 Installing frontend dependencies\e[0m"
+              npm install --production || { echo -e "\e[1;31m❌ Frontend installation failed\e[0m"; exit 1; }
+              echo -e "\e[1;35m🏗️ Building frontend app\e[0m"
+              npm run build || { echo -e "\e[1;31m❌ Frontend build failed\e[0m"; exit 1; }
+              cd "$CODE_DIR"
+            else
+              echo -e "\e[1;31m❌ Client directory not found\e[0m"
+              ls -la
+              exit 1
+            fi
 
             # Restart services
             echo -e "\e[1;32m🔄 Restarting services\e[0m"
-            sudo systemctl restart nginx
-            pm2 reload all --update-env
+
+            # Check if Nginx is installed and restart
+            if command -v nginx &> /dev/null; then
+              echo -e "\e[1;32m♻️ Restarting Nginx\e[0m"
+              sudo systemctl restart nginx || { echo -e "\e[1;31m❌ Nginx restart failed\e[0m"; exit 1; }
+              echo -e "\e[1;32m✅ Nginx restarted\e[0m"
+            else
+              echo -e "\e[1;33m⚠️ Nginx not found, skipping restart\e[0m"
+            fi
+
+            # Check if PM2 is installed and restart
+            if command -v pm2 &> /dev/null; then
+              # List running processes before restart
+              echo -e "\e[1;36m📋 Current PM2 processes:\e[0m"
+              pm2 list
+              
+              # Check if server is running with PM2
+              if pm2 id server > /dev/null; then
+                echo -e "\e[1;32m♻️ Reloading server process\e[0m"
+                cd "$CODE_DIR/server" && pm2 reload server --update-env
+              else
+                echo -e "\e[1;33m🚀 Starting server process with PM2\e[0m"
+                cd "$CODE_DIR/server" && pm2 start npm --name "server" -- start
+              fi
+              
+              echo -e "\e[1;32m✅ PM2 processes updated\e[0m"
+            else
+              echo -e "\e[1;33m⚠️ PM2 not found, skipping restart\e[0m"
+            fi
 
             echo -e "\e[1;42m ✅ DEPLOYMENT COMPLETED SUCCESSFULLY ✅ \e[0m"
