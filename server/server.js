@@ -96,10 +96,10 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173",
-      "http://3.92.223.195",
-      "http://3.92.223.195:5000",
+      "https://3.92.223.195",
+      "https://3.92.223.195:5000",
       "https://codeprepai.dev-om.live", // Your Vercel subdomain
-      "https://code-prep-ai.vercel.app/", // Default Vercel domain (if applicable)
+      "https://code-prep-ai.vercel.app", // Default Vercel domain (if applicable)
     ],
     credentials: true,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
@@ -195,7 +195,7 @@ app.listen(PORT, () => {
   );
   console.log(
     `API available at ${
-      isProduction ? "http://3.92.223.195/api" : `http://localhost:${PORT}/api`
+      isProduction ? "https://3.92.223.195/api" : `http://localhost:${PORT}/api`
     }`
   );
 });
