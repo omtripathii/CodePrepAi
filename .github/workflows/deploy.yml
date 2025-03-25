@@ -16,6 +16,7 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: "20"
+          cache: "npm"
 
       - name: Build Frontend
         run: |
@@ -25,7 +26,6 @@ jobs:
 
       - name: Create deployment package
         run: |
-          TIMESTAMP=$(date +%Y%m%d%H%M%S)
           mkdir -p deployment
 
           # Frontend
@@ -53,12 +53,24 @@ jobs:
           }
           EOL
 
-          # Nginx config
+          # Nginx config with proper paths
           mkdir -p deployment/nginx
           cat > deployment/nginx/codeprepai.conf << 'EOL'
+          # Disable the default site
+          server {
+              listen 80 default_server;
+              listen [::]:80 default_server;
+              server_name _;
+              return 444;
+          }
+
+          # Your application
           server {
               listen 80;
-              server_name codeprepai.dev-om.live;
+              server_name localhost;
+              
+              access_log /var/log/nginx/codeprepai-access.log;
+              error_log /var/log/nginx/codeprepai-error.log;
               
               location / {
                   root /home/ubuntu/codeprepai/client;
@@ -72,7 +84,9 @@ jobs:
                   proxy_set_header Upgrade $http_upgrade;
                   proxy_set_header Connection 'upgrade';
                   proxy_set_header Host $host;
+                  proxy_cache_bypass $http_upgrade;
                   proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
               }
           }
           EOL
@@ -121,62 +135,70 @@ jobs:
             JUDGE0_RAPID_API_KEY=${{ secrets.JUDGE0_API_KEY }}
             JUDGE0_API_URL=https://judge0-ce.p.rapidapi.com" > .env
 
-            # Test Nginx config
-            sudo cp $RELEASE_DIR/nginx/codeprepai.conf /etc/nginx/sites-available/codeprepai.conf
+            # Fix permissions
+            sudo chown -R ubuntu:ubuntu $RELEASE_DIR
+            sudo chmod -R 755 $RELEASE_DIR
+
+            # Disable default site if it exists
+            sudo rm -f /etc/nginx/sites-enabled/default
+
+            # Copy and test Nginx config
+            sudo cp $RELEASE_DIR/nginx/codeprepai.conf /etc/nginx/sites-available/
             sudo nginx -t
 
             if [ $? -eq 0 ]; then
               # Enable site and reload nginx
               sudo ln -sf /etc/nginx/sites-available/codeprepai.conf /etc/nginx/sites-enabled/
-              sudo systemctl reload nginx
               
-              # Store previous version for rollback
+              # Stop any running PM2 processes
+              pm2 stop all 2>/dev/null || true
+              
+              # Create/update symlink
               if [ -L "$CURRENT_LINK" ]; then
                 PREVIOUS=$(readlink $CURRENT_LINK)
-                rm $CURRENT_LINK
+                sudo rm -f $CURRENT_LINK
               fi
-              
-              # Update symlink
-              ln -sf $RELEASE_DIR $CURRENT_LINK
+              sudo ln -sf $RELEASE_DIR $CURRENT_LINK
               
               # Start new application version
-              cd $RELEASE_DIR/server
+              cd $CURRENT_LINK/server
               pm2 start ecosystem.config.js
               
-              # Verify deployment
-              sleep 5
+              # Save PM2 process list and make it start on reboot
+              pm2 save
+              pm2 startup
+              
+              # Restart Nginx completely instead of just reloading
+              sudo systemctl restart nginx
+              
+              # Verify deployment (with more time to start up)
+              echo "Waiting for server to start..."
+              sleep 10
               HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/api/health || echo "000")
               
               if [ "$HEALTH_CHECK" = "200" ]; then
                 echo "✅ Deployment successful!"
                 
-                # Stop old version
-                if [ ! -z "$PREVIOUS" ] && [ -d "$PREVIOUS" ]; then
-                  cd $PREVIOUS/server
-                  pm2 delete server 2>/dev/null || true
-                fi
-                
-                # Save PM2 process list
-                pm2 save
-                
                 # Clean up old deployments (keep last 3)
                 cd /home/ubuntu
-                ls -td codeprepai-20* | tail -n +4 | xargs --no-run-if-empty rm -rf
-              else
-                echo "❌ Health check failed with status $HEALTH_CHECK. Rolling back..."
+                ls -td codeprepai-20* | tail -n +4 | xargs --no-run-if-empty sudo rm -rf
                 
-                # Rollback to previous version
+                echo "🌐 Application deployed successfully!"
+                echo "📝 Nginx logs: /var/log/nginx/codeprepai-*.log"
+              else
+                echo "❌ Health check failed with status $HEALTH_CHECK"
+                echo "🔍 Checking logs for errors..."
+                
+                # Show PM2 logs
+                pm2 logs --lines 20
+                
+                echo "🔄 Rolling back..."
                 if [ ! -z "$PREVIOUS" ] && [ -d "$PREVIOUS" ]; then
-                  rm -f $CURRENT_LINK
-                  ln -sf $PREVIOUS $CURRENT_LINK
-                  
+                  sudo rm -f $CURRENT_LINK
+                  sudo ln -sf $PREVIOUS $CURRENT_LINK
                   cd $PREVIOUS/server
                   pm2 start ecosystem.config.js
                 fi
-                
-                # Stop failed version
-                cd $RELEASE_DIR/server
-                pm2 delete server 2>/dev/null || true
                 
                 exit 1
               fi
